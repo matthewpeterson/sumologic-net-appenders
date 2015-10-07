@@ -23,6 +23,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 namespace SumoLogic.Logging.Log4Net
 {
     using System;
@@ -32,7 +33,7 @@ namespace SumoLogic.Logging.Log4Net
     using System.Net.Http;
     using System.Text;
     using log4net.Appender;
-    using log4net.Core;
+    using log4net.spi;
     using SumoLogic.Logging.Common.Log;
     using SumoLogic.Logging.Common.Queue;
     using SumoLogic.Logging.Common.Sender;
@@ -252,6 +253,31 @@ namespace SumoLogic.Logging.Log4Net
         }
 
         /// <summary>
+        /// Is called when the appender is closed. Derived classes should override this method if resources need to be released.
+        /// </summary>
+        /// <remarks>
+        /// Releases any resources allocated within the appender such as file handles, network connections, etc.
+        /// It is a programming error to append to a closed appender.
+        /// </remarks>
+        public override void OnClose()
+        {
+            base.OnClose();
+
+            if (this.SumoLogicMessageSender != null)
+            {
+                this.SumoLogicMessageSender.Dispose();
+                this.SumoLogicMessageSender = null;
+            }
+
+            if (this.flushBufferTimer != null)
+            {
+                this.flushBufferTimer.Stop();
+                this.flushBufferTimer.Dispose();
+                this.flushBufferTimer = null;
+            }
+        }
+
+        /// <summary>
         /// Performs the actual logging of events.
         /// </summary>
         /// <param name="loggingEvent">The event to append.</param>
@@ -275,43 +301,18 @@ namespace SumoLogic.Logging.Log4Net
             var bodyBuilder = new StringBuilder();
             using (var textWriter = new StringWriter(bodyBuilder, CultureInfo.InvariantCulture))
             {
-                Layout.Format(textWriter, loggingEvent);
+                textWriter.Write(Layout.Format(loggingEvent));
 
                 if (Layout.IgnoresException)
                 {
-                    textWriter.Write(loggingEvent.GetExceptionString());
+                    textWriter.Write(loggingEvent.GetExceptionStrRep());
                     textWriter.WriteLine();
                 }
             }
 
             this.messagesQueue.Add(bodyBuilder.ToString());
         }
-
-        /// <summary>
-        /// Is called when the appender is closed. Derived classes should override this method if resources need to be released.
-        /// </summary>
-        /// <remarks>
-        /// Releases any resources allocated within the appender such as file handles, network connections, etc.
-        /// It is a programming error to append to a closed appender.
-        /// </remarks>
-        protected override void OnClose()
-        {
-            base.OnClose();
-
-            if (this.SumoLogicMessageSender != null)
-            {
-                this.SumoLogicMessageSender.Dispose();
-                this.SumoLogicMessageSender = null;
-            }
-
-            if (this.flushBufferTimer != null)
-            {
-                this.flushBufferTimer.Stop();
-                this.flushBufferTimer.Dispose();
-                this.flushBufferTimer = null;
-            }
-        }
-
+                               
         /// <summary>
         /// Activate Console Log.
         /// </summary>
